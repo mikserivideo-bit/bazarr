@@ -4,7 +4,8 @@ from flask_restx import Resource, Namespace, reqparse, fields, marshal
 from operator import itemgetter
 
 from app.database import TableHistory, TableHistoryMovie, database, select
-from app.get_providers import list_throttled_providers, reset_throttled_providers
+from app.get_providers import (get_opensubtitlescom_account_status, list_throttled_providers,
+                               reset_throttled_providers, switch_opensubtitlescom_account)
 
 from ..utils import authenticate, False_Keys
 
@@ -20,6 +21,9 @@ class Providers(Resource):
         'name': fields.String(),
         'status': fields.String(),
         'retry': fields.String(),
+        'active_username': fields.String(),
+        'account_index': fields.Integer(),
+        'account_count': fields.Integer(),
     })
 
     @authenticate
@@ -55,15 +59,20 @@ class Providers(Resource):
 
             providers_dicts = list()
             for provider in throttled_providers:
-                providers_dicts.append({
+                provider_status = {
                     "name": provider[0],
                     "status": provider[1] if provider[1] is not None else "Good",
                     "retry": provider[2] if provider[2] != "now" else "-"
-                })
+                }
+                if provider[0] == 'opensubtitlescom':
+                    provider_status.update(get_opensubtitlescom_account_status())
+                providers_dicts.append(provider_status)
         return marshal(sorted(providers_dicts, key=itemgetter('name')), self.get_response_model, envelope='data')
 
     post_request_parser = reqparse.RequestParser()
-    post_request_parser.add_argument('action', type=str, required=True, help='Action to perform from ["reset"]')
+    post_request_parser.add_argument(
+        'action', type=str, required=True,
+        help='Action to perform from ["reset", "switch_opensubtitlescom_account"]')
 
     @authenticate
     @api_ns_providers.doc(parser=post_request_parser)
@@ -78,5 +87,10 @@ class Providers(Resource):
         if action == 'reset':
             reset_throttled_providers()
             return '', 204
+        if action == 'switch_opensubtitlescom_account':
+            account_status = switch_opensubtitlescom_account()
+            if account_status is None:
+                return {'message': 'No next OpenSubtitles.com account is available'}, 400
+            return account_status, 200
 
         return 'Unknown action', 400

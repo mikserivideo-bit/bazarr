@@ -1,8 +1,16 @@
 import { FunctionComponent } from "react";
 import { Container, Group } from "@mantine/core";
 import { useDocumentTitle } from "@mantine/hooks";
-import { faSync, faTrash } from "@fortawesome/free-solid-svg-icons";
-import { useResetProvider, useSystemProviders } from "@/apis/hooks";
+import {
+  faRightLeft,
+  faSync,
+  faTrash,
+} from "@fortawesome/free-solid-svg-icons";
+import {
+  useResetProvider,
+  useSwitchOpenSubtitlesAccount,
+  useSystemProviders,
+} from "@/apis/hooks";
 import { useInstanceName } from "@/apis/hooks/site";
 import { Toolbox } from "@/components";
 import { QueryOverlay } from "@/components/async";
@@ -14,6 +22,8 @@ const SystemProvidersView: FunctionComponent = () => {
   const { isFetching, data, refetch } = providers;
 
   const { mutate: reset, isPending: isResetting } = useResetProvider();
+  const { mutate: switchAccount, isPending: isSwitchingAccount } =
+    useSwitchOpenSubtitlesAccount();
 
   useDocumentTitle(`Providers - ${useInstanceName()} (System)`);
 
@@ -35,6 +45,13 @@ const SystemProvidersView: FunctionComponent = () => {
               onClick={() => reset()}
             >
               Reset
+            </Toolbox.Button>
+            <Toolbox.Button
+              icon={faRightLeft}
+              loading={isSwitchingAccount}
+              onClick={() => switchAccount()}
+            >
+              Switch OpenSubtitles account
             </Toolbox.Button>
           </Group>
         </Toolbox>

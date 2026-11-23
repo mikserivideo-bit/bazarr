@@ -3,6 +3,7 @@
 import os
 import datetime
 import logging
+import json
 import subliminal_patch
 import pretty
 import time
@@ -540,6 +541,73 @@ def list_throttled_providers():
         reason, until, throttle_desc = tp.get(provider, (None, None, None))
         throttled_providers.append([provider, reason, pretty.date(until)])
     return throttled_providers
+
+
+def get_opensubtitlescom_account_status():
+    try:
+        from subtitles.pool import _pools
+
+        for pool in _pools.values():
+            if 'opensubtitlescom' not in pool.initialized_providers:
+                continue
+            provider = pool.initialized_providers['opensubtitlescom']
+            status = provider.get_account_status()
+            if status:
+                return status
+    except Exception:
+        logging.exception("Could not get OpenSubtitles.com account status")
+
+    accounts = settings.opensubtitlescom.accounts
+    try:
+        parsed_accounts = json.loads(accounts)
+    except (TypeError, json.JSONDecodeError):
+        parsed_accounts = []
+
+    if isinstance(parsed_accounts, dict):
+        usernames = parsed_accounts.get('usernames', [])
+    elif isinstance(parsed_accounts, list):
+        usernames = [account.get('username') for account in parsed_accounts
+                     if isinstance(account, dict) and account.get('username')]
+    else:
+        usernames = []
+
+    active_index = 0
+    cached_index = subliminal_cache_region.get(
+        f"oscom_account_index_{datetime.datetime.now(datetime.timezone.utc).date().isoformat()}",
+        expiration_time=datetime.timedelta(days=2),
+    )
+    if isinstance(cached_index, int) and 0 <= cached_index < len(usernames):
+        active_index = cached_index
+
+    return {
+        'active_username': usernames[active_index] if usernames else '',
+        'account_index': active_index,
+        'account_count': len(usernames),
+    }
+
+
+def switch_opensubtitlescom_account():
+    try:
+        from subtitles.pool import _pools
+
+        switched = False
+        for pool in _pools.values():
+            provider = pool.initialized_providers.get('opensubtitlescom')
+            if provider:
+                if provider.switch_account():
+                    switched = True
+
+        if switched:
+            for pool in _pools.values():
+                provider = pool.initialized_providers.get('opensubtitlescom')
+                if provider:
+                    return provider.get_account_status()
+        return None
+    except Exception:
+        logging.exception("Could not switch OpenSubtitles.com account")
+        raise
+
+    return None
 
 
 def reset_throttled_providers(only_auth_or_conf_error=False):

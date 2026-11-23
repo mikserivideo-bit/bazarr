@@ -62,6 +62,23 @@ export const useResetProvider = () => {
   });
 };
 
+export const useSwitchOpenSubtitlesAccount = () => {
+  const client = useQueryClient();
+  return useMutation({
+    mutationKey: [
+      QueryKeys.System,
+      QueryKeys.Providers,
+      "opensubtitles-account",
+    ],
+    mutationFn: () => api.providers.switchOpenSubtitlesAccount(),
+    onSuccess: () => {
+      client.invalidateQueries({
+        queryKey: [QueryKeys.System, QueryKeys.Providers],
+      });
+    },
+  });
+};
+
 export const useDownloadEpisodeSubtitles = () => {
   const client = useQueryClient();
 

@@ -69,3 +69,24 @@ def test_daily_download_limit_is_reported_when_every_account_is_limited(provider
     with pytest.raises(DownloadLimitExceeded, match='Daily download limit reached'):
         provider.checked(lambda: next(responses))
 
+
+def test_download_with_no_endpoint_response_sets_empty_content(provider, monkeypatch):
+    provider.retry = lambda func, amount: None
+    subtitle = type('Subtitle', (), {'file_id': 123, 'content': b'old'})()
+
+    provider.download_subtitle(subtitle)
+
+    assert subtitle.content is None
+
+
+def test_account_status_and_manual_switch(provider):
+    assert provider.get_account_status() == {
+        'active_username': 'first@example.com',
+        'account_index': 0,
+        'account_count': 2,
+    }
+
+    assert provider.switch_account() is True
+    assert provider.username == 'second@example.com'
+    assert provider.get_account_status()['active_username'] == 'second@example.com'
+

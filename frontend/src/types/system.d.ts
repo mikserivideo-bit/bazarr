@@ -61,6 +61,15 @@ declare namespace System {
     name: string;
     status: string;
     retry: string;
+    active_username?: string;
+    account_index?: number;
+    account_count?: number;
+  }
+
+  interface OpenSubtitlesAccountStatus {
+    active_username: string;
+    account_index: number;
+    account_count: number;
   }
 
   type LogType = "INFO" | "WARNING" | "ERROR" | "DEBUG";

@@ -237,6 +237,47 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         self.username = self.accounts[index]['username']
         self.password = self.accounts[index]['password']
 
+    def get_account_status(self):
+        return {
+            'active_username': self.username,
+            'account_index': self.account_index,
+            'account_count': len(self.accounts),
+        }
+
+    def switch_account(self, tried_accounts=None):
+        if len(self.accounts) < 2:
+            return False
+
+        if tried_accounts is None:
+            tried_accounts = {self.account_index}
+
+        for offset in range(1, len(self.accounts) + 1):
+            account_index = (self.account_index + offset) % len(self.accounts)
+            if account_index in tried_accounts:
+                continue
+
+            tried_accounts.add(account_index)
+            self.session.headers.pop('Authorization', None)
+            self.token = None
+            self._use_account(account_index)
+            cached_server = region.get(self._account_cache_key('server'),
+                                       expiration_time=TOKEN_EXPIRATION_TIME)
+            self.server_hostname = ('api.opensubtitles.com' if cached_server is NO_VALUE else cached_server)
+
+            try:
+                logger.info("Switching OpenSubtitles.com account to %s", self.username)
+                self.login(is_retry=True, tried_accounts=tried_accounts)
+            except (AuthenticationError, ConfigurationError, ProviderError, ServiceUnavailable):
+                logger.warning("OpenSubtitles.com account %s could not be used", self.username)
+                continue
+
+            region.set(self._daily_account_index_key(), self.account_index,
+                       expiration_time=datetime.timedelta(days=2))
+            logger.info("Active OpenSubtitles.com account is now %s", self.username)
+            return True
+
+        return False
+
     def _account_cache_key(self, key):
         username_hash = hashlib.sha256(self.username.encode('utf-8')).hexdigest()[:16]
         return f'oscom_{key}_{username_hash}'
@@ -520,7 +561,12 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
             amount=retry_amount
         )
 
-        logger.debug(f'params sent to the download endpoint: {res.request.body}')
+        if not res:
+            logger.error('OpenSubtitles.com download endpoint returned no response')
+            subtitle.content = None
+            return
+
+        logger.debug(f'params sent to the download endpoint: {getattr(res.request, "body", None)}')
         download_data = res.json()
         subtitle.download_link = download_data['link']
 
@@ -541,32 +587,7 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
             subtitle.content = fix_line_ending(subtitle_content)
 
     def _try_next_account(self, tried_accounts):
-        if len(self.accounts) < 2:
-            return False
-
-        for offset in range(1, len(self.accounts) + 1):
-            account_index = (self.account_index + offset) % len(self.accounts)
-            if account_index in tried_accounts:
-                continue
-
-            tried_accounts.add(account_index)
-            self.session.headers.pop('Authorization', None)
-            self.token = None
-            self._use_account(account_index)
-            cached_server = region.get(self._account_cache_key('server'),
-                                       expiration_time=TOKEN_EXPIRATION_TIME)
-            self.server_hostname = ('api.opensubtitles.com' if cached_server is NO_VALUE else cached_server)
-
-            try:
-                self.login(is_retry=True, tried_accounts=tried_accounts)
-            except AuthenticationError:
-                continue
-
-            region.set(self._daily_account_index_key(), self.account_index,
-                       expiration_time=datetime.timedelta(days=2))
-            return True
-
-        return False
+        return self.switch_account(tried_accounts)
 
     def reset_token(self):
         logger.debug('Authentication failed: clearing cache and attempting to login.')
@@ -592,100 +613,99 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         if tried_accounts is None:
             tried_accounts = {self.account_index}
         try:
+            response = fn()
+        except APIThrottled:
+            if not raise_api_limit:
+                logger.info("API request limit hit, waiting and trying again once.")
+                time.sleep(15)
+                return self.checked(fn, raise_api_limit=True, validate_json=validate_json,
+                                    json_key_name=json_key_name, validate_content=validate_content,
+                                    is_retry=is_retry, tried_accounts=tried_accounts)
+            raise
+        except (ConnectionError, Timeout, ReadTimeout) as error:
+            raise ServiceUnavailable('Unknown Error, provider returned no response') from error
+        except Exception as error:
+            logger.exception('Unhandled exception raised.')
+            raise ProviderError('Unhandled exception raised. Check log.') from error
+
+        status_code = response.status_code
+
+        if status_code == 400:
             try:
-                response = fn()
-            except APIThrottled:
-                if not raise_api_limit:
-                    logger.info("API request limit hit, waiting and trying again once.")
-                    time.sleep(15)
-                    return self.checked(fn, raise_api_limit=True)
-                raise
-            except (ConnectionError, Timeout, ReadTimeout):
-                raise ServiceUnavailable(f'Unknown Error, empty response: {response.status_code}: {response}')
-            except Exception:
-                logger.exception('Unhandled exception raised.')
-                raise ProviderError('Unhandled exception raised. Check log.')
+                json_response = response.json()
+                message = json_response['message']
+            except JSONDecodeError:
+                raise ProviderError('Invalid JSON returned by provider')
             else:
-                status_code = response.status_code
-        except Exception:
-            status_code = None
-        else:
-            if status_code == 400:
-                try:
-                    json_response = response.json()
-                    message = json_response['message']
-                except JSONDecodeError:
-                    raise ProviderError('Invalid JSON returned by provider')
-                else:
-                    log_request_response(response)
-                    raise ConfigurationError(message)
-            elif status_code == 401:
                 log_request_response(response)
-                self.reset_token()
-                if is_retry:
-                    if self._try_next_account(tried_accounts):
-                        return self.checked(fn, raise_api_limit=raise_api_limit, validate_json=validate_json,
-                                            json_key_name=json_key_name, validate_content=validate_content,
-                                            tried_accounts=tried_accounts)
-                    raise AuthenticationError('Login failed')
-                else:
-                    time.sleep(1)
-                    self.login(is_retry=True, tried_accounts=tried_accounts)
+                raise ConfigurationError(message)
+        elif status_code == 401:
+            log_request_response(response)
+            self.reset_token()
+            if is_retry:
+                if self._try_next_account(tried_accounts):
                     return self.checked(fn, raise_api_limit=raise_api_limit, validate_json=validate_json,
-                                        json_key_name=json_key_name, validate_content=validate_content, is_retry=True,
+                                        json_key_name=json_key_name, validate_content=validate_content,
                                         tried_accounts=tried_accounts)
-            elif status_code == 403:
+                raise AuthenticationError('Login failed')
+            else:
+                time.sleep(1)
+                self.login(is_retry=True, tried_accounts=tried_accounts)
+                return self.checked(fn, raise_api_limit=raise_api_limit, validate_json=validate_json,
+                                    json_key_name=json_key_name, validate_content=validate_content, is_retry=True,
+                                    tried_accounts=tried_accounts)
+        elif status_code == 403:
+            log_request_response(response)
+            raise ProviderError("Bazarr API key seems to be in problem")
+        elif status_code == 406:
+            try:
+                json_response = response.json()
+                download_count = json_response['requests']
+                remaining_download = json_response['remaining']
+                quota_reset_time = json_response['reset_time']
+            except JSONDecodeError:
+                raise ProviderError('Invalid JSON returned by provider')
+            else:
                 log_request_response(response)
-                raise ProviderError("Bazarr API key seems to be in problem")
-            elif status_code == 406:
-                try:
-                    json_response = response.json()
-                    download_count = json_response['requests']
-                    remaining_download = json_response['remaining']
-                    quota_reset_time = json_response['reset_time']
-                except JSONDecodeError:
-                    raise ProviderError('Invalid JSON returned by provider')
-                else:
-                    log_request_response(response)
-                    if self._try_next_account(tried_accounts):
-                        return self.checked(fn, raise_api_limit=raise_api_limit, validate_json=validate_json,
-                                            json_key_name=json_key_name, validate_content=validate_content,
-                                            tried_accounts=tried_accounts)
-                    raise DownloadLimitExceeded(f"Daily download limit reached. {download_count} subtitles have been "
-                                                f"downloaded and {remaining_download} remaining subtitles can be "
-                                                f"downloaded. Quota will be reset in {quota_reset_time}.")
-            elif status_code == 410:
-                log_request_response(response)
-                raise ProviderError("Download link has expired")
-            elif status_code == 429:
-                log_request_response(response)
-                raise TooManyRequests()
-            elif status_code == 502:
-                # this one should deal with Bad Gateway issue on their side.
-                raise APIThrottled()
-            elif 500 <= status_code <= 599:
-                raise ProviderError(response.reason)
+                if self._try_next_account(tried_accounts):
+                    return self.checked(fn, raise_api_limit=raise_api_limit, validate_json=validate_json,
+                                        json_key_name=json_key_name, validate_content=validate_content,
+                                        tried_accounts=tried_accounts)
+                raise DownloadLimitExceeded(f"Daily download limit reached. {download_count} subtitles have been "
+                                            f"downloaded and {remaining_download} remaining subtitles can be "
+                                            f"downloaded. Quota will be reset in {quota_reset_time}.")
+        elif status_code == 410:
+            log_request_response(response)
+            raise ProviderError("Download link has expired")
+        elif status_code == 429:
+            log_request_response(response)
+            raise TooManyRequests()
+        elif status_code == 502:
+            # this one should deal with Bad Gateway issue on their side.
+            raise APIThrottled()
+        elif 500 <= status_code <= 599:
+            raise ProviderError(response.reason)
 
-            if status_code != 200:
-                log_request_response(response)
-                raise ProviderError(f'Bad status code: {response.status_code}')
+        if status_code != 200:
+            log_request_response(response)
+            raise ProviderError(f'Bad status code: {response.status_code}')
 
-            if validate_json:
-                try:
-                    json_test = response.json()
-                except JSONDecodeError:
-                    raise ProviderError('Invalid JSON returned by provider')
-                else:
-                    if json_key_name not in json_test:
-                        raise ProviderError(f'Invalid JSON returned by provider: no {json_key_name} key in returned json.')
+        if validate_json:
+            try:
+                json_test = response.json()
+            except JSONDecodeError:
+                raise ProviderError('Invalid JSON returned by provider')
+            else:
+                if json_key_name not in json_test:
+                    raise ProviderError(f'Invalid JSON returned by provider: no {json_key_name} key in returned json.')
 
-            if validate_content:
-                if not hasattr(response, 'content'):
-                    logger.error('Download link returned no content attribute.')
-                    return False
-                elif not response.content:
-                    logger.error(f'This download link returned empty content: {response.url}')
-                    return False
+        if validate_content:
+            if not hasattr(response, 'content'):
+                logger.error('Download link returned no content attribute.')
+                return False
+            elif not response.content:
+                logger.error(f'This download link returned empty content: {response.url}')
+                return False
 
         return response
 
