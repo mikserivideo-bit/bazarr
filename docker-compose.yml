@@ -13,5 +13,5 @@ services:
       - /volume1/docker/bazarr-luka:/config
       - /volume1/shared:/data
     ports:
-      - "6768:6767"
+      - "6768:6768"
     restart: unless-stopped
