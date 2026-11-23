@@ -71,7 +71,21 @@ export const useSwitchOpenSubtitlesAccount = () => {
       "opensubtitles-account",
     ],
     mutationFn: () => api.providers.switchOpenSubtitlesAccount(),
-    onSuccess: () => {
+    onSuccess: (accountStatus) => {
+      client.setQueryData<System.Provider[]>(
+        [QueryKeys.System, QueryKeys.Providers, false],
+        (providers) =>
+          providers?.map((provider) =>
+            provider.name === "opensubtitlescom"
+              ? {
+                  ...provider,
+                  active_username: accountStatus.active_username,
+                  account_index: accountStatus.account_index,
+                  account_count: accountStatus.account_count,
+                }
+              : provider,
+          ),
+      );
       client.invalidateQueries({
         queryKey: [QueryKeys.System, QueryKeys.Providers],
       });

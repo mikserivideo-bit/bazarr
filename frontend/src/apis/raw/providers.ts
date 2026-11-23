@@ -18,9 +18,9 @@ class ProviderApi extends BaseApi {
   }
 
   async switchOpenSubtitlesAccount() {
-    const response = await this.post<System.OpenSubtitlesAccountStatus>("", {
-      action: "switch_opensubtitlescom_account",
-    });
+    const response = await this.post<System.OpenSubtitlesAccountStatus>(
+      "/opensubtitlescom/account",
+    );
     return response.data;
   }
 

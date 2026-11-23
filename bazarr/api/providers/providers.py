@@ -94,3 +94,16 @@ class Providers(Resource):
             return account_status, 200
 
         return 'Unknown action', 400
+
+
+@api_ns_providers.route('providers/opensubtitlescom/account')
+class OpenSubtitlesComAccount(Resource):
+    @authenticate
+    @api_ns_providers.response(200, 'Success')
+    @api_ns_providers.response(400, 'No next account available')
+    @api_ns_providers.response(401, 'Not Authenticated')
+    def post(self):
+        account_status = switch_opensubtitlescom_account()
+        if account_status is None:
+            return {'message': 'No next OpenSubtitles.com account is available'}, 400
+        return account_status, 200
