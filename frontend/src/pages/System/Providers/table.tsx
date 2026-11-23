@@ -21,19 +21,6 @@ const Table: FunctionComponent<Props> = (props) => {
         header: "Next Retry",
         accessorKey: "retry",
       },
-      {
-        header: "OpenSubtitles Account",
-        accessorKey: "active_username",
-        cell: (info) => {
-          const account = info.row.original.active_username;
-          if (!account) {
-            return "-";
-          }
-          const count = info.row.original.account_count;
-          const index = info.row.original.account_index;
-          return `${account}${count ? ` (${typeof index === "number" ? index + 1 : 1}/${count})` : ""}`;
-        },
-      },
     ],
     [],
   );

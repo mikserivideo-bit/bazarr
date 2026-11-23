@@ -590,24 +590,31 @@ def switch_opensubtitlescom_account():
     try:
         from subtitles.pool import _pools
 
-        switched = False
-        for pool in _pools.values():
-            provider = pool.initialized_providers.get('opensubtitlescom')
-            if provider:
+        providers = [
+            pool.initialized_providers['opensubtitlescom']
+            for pool in _pools.values()
+            if 'opensubtitlescom' in pool.initialized_providers
+        ]
+        if providers:
+            switched = False
+            for provider in providers:
                 if provider.switch_account():
                     switched = True
+            if switched:
+                return providers[0].get_account_status()
+            return None
 
-        if switched:
-            for pool in _pools.values():
-                provider = pool.initialized_providers.get('opensubtitlescom')
-                if provider:
-                    return provider.get_account_status()
-        return None
+        provider = provider_registry['opensubtitlescom'](**get_providers_auth()['opensubtitlescom'])
+        try:
+            provider.initialize()
+            if provider.switch_account():
+                return provider.get_account_status()
+            return None
+        finally:
+            provider.terminate()
     except Exception:
         logging.exception("Could not switch OpenSubtitles.com account")
         raise
-
-    return None
 
 
 def reset_throttled_providers(only_auth_or_conf_error=False):

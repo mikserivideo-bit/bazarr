@@ -23,6 +23,7 @@ import {
 import { useForm } from "@mantine/form";
 import {
   faCircleCheck,
+  faRightLeft,
   faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -55,6 +56,10 @@ import { useSettings } from "@/pages/Settings/utilities/useSettings";
 import { BuildKey, useSelectorOptions } from "@/utilities";
 import { ASSERT } from "@/utilities/console";
 import { IntegrationList, ProviderInfo, ProviderList } from "./list";
+import {
+  useSwitchOpenSubtitlesAccount,
+  useSystemProviders,
+} from "@/apis/hooks";
 
 type SettingsKey =
   | "settings-general-enabled_providers"
@@ -96,6 +101,15 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
   const { value, update } = useBaseInput<{ settingKey: string }, string>({
     settingKey,
   });
+  const providers = useSystemProviders();
+  const { mutate: switchAccount, isPending: isSwitchingAccount } =
+    useSwitchOpenSubtitlesAccount();
+  const openSubtitlesProvider = providers.data?.find(
+    (provider) => provider.name === "opensubtitlescom",
+  );
+  const activeUsername = openSubtitlesProvider?.active_username;
+  const accountCount = openSubtitlesProvider?.account_count ?? 0;
+  const accountIndex = openSubtitlesProvider?.account_index;
   const parsedSettings = (() => {
     try {
       const parsed: unknown = JSON.parse(value ?? "[]");
@@ -155,6 +169,23 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
 
   return (
     <Stack gap="xs">
+      <Alert color="blue" variant="light">
+        Active OpenSubtitles username:{" "}
+        <strong>{activeUsername || "Unknown"}</strong>
+        {accountCount > 0 && typeof accountIndex === "number"
+          ? ` (${accountIndex + 1}/${accountCount})`
+          : ""}
+      </Alert>
+      {accountCount > 1 ? (
+        <Button
+          leftSection={<FontAwesomeIcon icon={faRightLeft} />}
+          loading={isSwitchingAccount}
+          onClick={() => switchAccount()}
+          variant="light"
+        >
+          Switch OpenSubtitles username
+        </Button>
+      ) : null}
       <Textarea
         label="Usernames"
         description="Enter one username per line. All accounts use the password below."
