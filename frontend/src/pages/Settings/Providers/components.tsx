@@ -112,8 +112,19 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
   const accountIndex = openSubtitlesProvider?.account_index;
   const parsedSettings = (() => {
     try {
-      const parsed: unknown = JSON.parse(value ?? "[]");
+      const parsed: unknown =
+        typeof value === "string" ? JSON.parse(value) : (value ?? []);
       if (Array.isArray(parsed)) {
+        if (parsed.every((account) => typeof account === "string")) {
+          return {
+            settings: {
+              usernames: parsed,
+              password: "",
+            },
+            invalid: false,
+          };
+        }
+
         const usernames = parsed
           .filter(isOpenSubtitlesAccount)
           .map((account) => account.username);
@@ -210,8 +221,8 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
       />
       {invalid ? (
         <MantineText c="danger" size="xs">
-          Saved accounts have different passwords or an invalid format. Enter
-          the usernames and shared password again.
+          Saved accounts have different passwords or an unsupported format.
+          Enter the usernames and shared password again.
         </MantineText>
       ) : null}
     </Stack>

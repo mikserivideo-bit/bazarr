@@ -428,7 +428,9 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
           rule: (value: string) => {
             const parsedAccounts = (() => {
               try {
-                return JSON.parse(value) as unknown;
+                return (
+                  typeof value === "string" ? JSON.parse(value) : value
+                ) as unknown;
               } catch {
                 return null;
               }
@@ -436,6 +438,12 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
 
             const accountDetails = (() => {
               if (Array.isArray(parsedAccounts)) {
+                if (
+                  parsedAccounts.every((account) => typeof account === "string")
+                ) {
+                  return { usernames: parsedAccounts, password: "" };
+                }
+
                 if (
                   !parsedAccounts.every(
                     (account) =>
@@ -448,14 +456,13 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
                 const passwords = new Set(
                   parsedAccounts.map((account) => account.password),
                 );
-                return passwords.size <= 1
-                  ? {
-                      usernames: parsedAccounts.map(
-                        (account) => account.username,
-                      ),
-                      password: passwords.values().next().value ?? "",
-                    }
-                  : null;
+                return {
+                  usernames: parsedAccounts.map((account) => account.username),
+                  password:
+                    passwords.size === 1
+                      ? (passwords.values().next().value ?? "")
+                      : "",
+                };
               }
 
               if (
