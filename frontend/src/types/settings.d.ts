@@ -234,6 +234,7 @@ declare namespace Settings {
   }
 
   interface OpenSubtitlesCom extends BaseProvider {
+    accounts: string;
     use_hash: boolean;
   }
 

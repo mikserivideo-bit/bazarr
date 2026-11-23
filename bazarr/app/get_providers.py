@@ -255,6 +255,7 @@ def get_providers_auth():
         },
         'opensubtitlescom': {'username': settings.opensubtitlescom.username,
                              'password': settings.opensubtitlescom.password,
+                             'accounts': settings.opensubtitlescom.accounts,
                              'use_hash': settings.opensubtitlescom.use_hash,
                              'include_ai_translated': settings.opensubtitlescom.include_ai_translated,
                              'include_machine_translated': settings.opensubtitlescom.include_machine_translated,

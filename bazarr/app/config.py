@@ -1,6 +1,7 @@
 # coding=utf-8
 
 import hashlib
+import json
 import os
 import ast
 import logging
@@ -310,6 +311,7 @@ validators = [
     # opensubtitles.com section
     Validator('opensubtitlescom.username', must_exist=True, default='', is_type_of=str, cast=str),
     Validator('opensubtitlescom.password', must_exist=True, default='', is_type_of=str, cast=str),
+    Validator('opensubtitlescom.accounts', must_exist=True, default='[]', is_type_of=str, cast=str),
     Validator('opensubtitlescom.use_hash', must_exist=True, default=True, is_type_of=bool),
     Validator('opensubtitlescom.include_ai_translated', must_exist=True, default=False, is_type_of=bool),
     Validator('opensubtitlescom.include_machine_translated', must_exist=True, default=False, is_type_of=bool),
@@ -644,6 +646,35 @@ if hasattr(settings.translator, 'gemini_key'):
         settings.translator.gemini_keys = [legacy_key]
     del settings.translator.gemini_key
 
+# backward compatibility: migrate OpenSubtitles.com credentials to accounts
+try:
+    opensubtitles_accounts = json.loads(settings.opensubtitlescom.accounts)
+except (TypeError, ValueError):
+    opensubtitles_accounts = []
+
+if isinstance(opensubtitles_accounts, list) and opensubtitles_accounts:
+    legacy_passwords = {account['password'] for account in opensubtitles_accounts
+                        if isinstance(account, dict) and isinstance(account.get('password'), str)}
+    if len(legacy_passwords) == 1 and all(
+            isinstance(account, dict) and isinstance(account.get('username'), str) and account.get('username') and
+            isinstance(account.get('password'), str) and account.get('password')
+            for account in opensubtitles_accounts):
+        settings.opensubtitlescom.accounts = json.dumps({
+            'usernames': [account['username'] for account in opensubtitles_accounts],
+            'password': legacy_passwords.pop(),
+        })
+        opensubtitles_accounts = json.loads(settings.opensubtitlescom.accounts)
+
+if not opensubtitles_accounts and settings.opensubtitlescom.username and settings.opensubtitlescom.password:
+    settings.opensubtitlescom.accounts = json.dumps({
+        'usernames': [settings.opensubtitlescom.username],
+        'password': settings.opensubtitlescom.password,
+    })
+    opensubtitles_accounts = json.loads(settings.opensubtitlescom.accounts)
+if opensubtitles_accounts:
+    settings.opensubtitlescom.username = ''
+    settings.opensubtitlescom.password = ''
+
 # save updated settings to file
 write_config()
 
@@ -844,6 +875,10 @@ def save_settings(settings_items):
                 region.delete('oscom_token')
         elif key == 'settings-opensubtitlescom-password':
             if value != settings.opensubtitlescom.password:
+                reset_providers = True
+                region.delete('oscom_token')
+        elif key == 'settings-opensubtitlescom-accounts':
+            if value != settings.opensubtitlescom.accounts:
                 reset_providers = True
                 region.delete('oscom_token')
 

@@ -14,9 +14,11 @@ import {
   Button,
   Divider,
   Group,
+  PasswordInput,
   SimpleGrid,
   Stack,
   Text as MantineText,
+  Textarea,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import {
@@ -44,7 +46,10 @@ import {
   useFormActions,
   useStagedValues,
 } from "@/pages/Settings/utilities/FormValues";
-import { useSettingValue } from "@/pages/Settings/utilities/hooks";
+import {
+  useBaseInput,
+  useSettingValue,
+} from "@/pages/Settings/utilities/hooks";
 import { SettingsProvider } from "@/pages/Settings/utilities/SettingsProvider";
 import { useSettings } from "@/pages/Settings/utilities/useSettings";
 import { BuildKey, useSelectorOptions } from "@/utilities";
@@ -64,6 +69,123 @@ interface ProviderSelect {
   value: string;
   payload: ProviderInfo;
 }
+
+interface OpenSubtitlesAccountSettings {
+  usernames: string[];
+  password: string;
+}
+
+interface OpenSubtitlesLegacyAccount {
+  username: string;
+  password: string;
+}
+
+const isOpenSubtitlesAccount = (
+  value: unknown,
+): value is OpenSubtitlesLegacyAccount =>
+  typeof value === "object" &&
+  value !== null &&
+  "username" in value &&
+  typeof value.username === "string" &&
+  "password" in value &&
+  typeof value.password === "string";
+
+const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
+  settingKey,
+}) => {
+  const { value, update } = useBaseInput<{ settingKey: string }, string>({
+    settingKey,
+  });
+  const parsedSettings = (() => {
+    try {
+      const parsed: unknown = JSON.parse(value ?? "[]");
+      if (Array.isArray(parsed)) {
+        const usernames = parsed
+          .filter(isOpenSubtitlesAccount)
+          .map((account) => account.username);
+        const passwords = new Set(
+          parsed
+            .filter(isOpenSubtitlesAccount)
+            .map((account) => account.password),
+        );
+        if (usernames.length === parsed.length && passwords.size <= 1) {
+          return {
+            settings: {
+              usernames,
+              password: passwords.values().next().value ?? "",
+            },
+            invalid: false,
+          };
+        }
+        return {
+          settings: {
+            usernames,
+            password: "",
+          },
+          invalid: true,
+        };
+      }
+
+      if (
+        typeof parsed === "object" &&
+        parsed !== null &&
+        "usernames" in parsed &&
+        Array.isArray(parsed.usernames) &&
+        parsed.usernames.every((username) => typeof username === "string") &&
+        "password" in parsed &&
+        typeof parsed.password === "string"
+      ) {
+        return {
+          settings: {
+            usernames: parsed.usernames,
+            password: parsed.password,
+          },
+          invalid: false,
+        };
+      }
+      return { settings: { usernames: [], password: "" }, invalid: true };
+    } catch {
+      return { settings: { usernames: [], password: "" }, invalid: true };
+    }
+  })();
+  const { settings: accountSettings, invalid } = parsedSettings;
+
+  const save = (next: OpenSubtitlesAccountSettings) =>
+    update(JSON.stringify(next));
+
+  return (
+    <Stack gap="xs">
+      <Textarea
+        label="Usernames"
+        description="Enter one username per line. All accounts use the password below."
+        minRows={3}
+        value={accountSettings.usernames.join("\n")}
+        onChange={(event) =>
+          save({
+            ...accountSettings,
+            usernames: event.currentTarget.value
+              .split(/\r?\n/)
+              .map((username) => username.trim())
+              .filter(Boolean),
+          })
+        }
+      />
+      <PasswordInput
+        label="Shared password"
+        value={accountSettings.password}
+        onChange={(event) =>
+          save({ ...accountSettings, password: event.currentTarget.value })
+        }
+      />
+      {invalid ? (
+        <MantineText c="danger" size="xs">
+          Saved accounts have different passwords or an invalid format. Enter
+          the usernames and shared password again.
+        </MantineText>
+      ) : null}
+    </Stack>
+  );
+};
 
 export const ProviderView: FunctionComponent<ProviderViewProps> = ({
   availableOptions,
@@ -376,6 +498,16 @@ const ProviderTool: FunctionComponent<ProviderToolProps> = ({
                 label={label}
                 settingKey={`settings-${itemKey}-${key}`}
               ></Password>
+              {error}
+            </Fragment>,
+          );
+          return;
+        case "accounts":
+          elements.push(
+            <Fragment key={BuildKey(itemKey, key)}>
+              <OpenSubtitlesAccounts
+                settingKey={`settings-${itemKey}-${key}`}
+              ></OpenSubtitlesAccounts>
               {error}
             </Fragment>,
           );

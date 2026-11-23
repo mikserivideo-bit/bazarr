@@ -19,6 +19,7 @@ type Input<T, N> = {
 type AvailableInput =
   | Input<Text, "text">
   | Input<string, "password">
+  | Input<string, "accounts">
   | Input<boolean, "switch">
   | Input<string, "select">
   | Input<string, "testbutton">
@@ -420,18 +421,88 @@ export const ProviderList: Readonly<ProviderInfo[]> = [
     name: "OpenSubtitles.com",
     inputs: [
       {
-        type: "text",
-        key: "username",
+        type: "accounts",
+        key: "accounts",
+        name: "Accounts",
         validation: {
-          rule: (value: string) =>
-            /^.\S+@\S+$/.test(value)
-              ? "Invalid Username. Do not use your e-mail."
-              : null,
+          rule: (value: string) => {
+            const parsedAccounts = (() => {
+              try {
+                return JSON.parse(value) as unknown;
+              } catch {
+                return null;
+              }
+            })();
+
+            const accountDetails = (() => {
+              if (Array.isArray(parsedAccounts)) {
+                if (
+                  !parsedAccounts.every(
+                    (account) =>
+                      typeof account?.username === "string" &&
+                      typeof account?.password === "string",
+                  )
+                ) {
+                  return null;
+                }
+                const passwords = new Set(
+                  parsedAccounts.map((account) => account.password),
+                );
+                return passwords.size <= 1
+                  ? {
+                      usernames: parsedAccounts.map(
+                        (account) => account.username,
+                      ),
+                      password: passwords.values().next().value ?? "",
+                    }
+                  : null;
+              }
+
+              if (
+                typeof parsedAccounts === "object" &&
+                parsedAccounts !== null &&
+                "usernames" in parsedAccounts &&
+                Array.isArray(parsedAccounts.usernames) &&
+                parsedAccounts.usernames.every(
+                  (username) => typeof username === "string",
+                ) &&
+                "password" in parsedAccounts &&
+                typeof parsedAccounts.password === "string"
+              ) {
+                return {
+                  usernames: parsedAccounts.usernames,
+                  password: parsedAccounts.password,
+                };
+              }
+              return null;
+            })();
+
+            if (accountDetails === null) {
+              return "Invalid OpenSubtitles account list";
+            }
+
+            if (
+              accountDetails.usernames.length === 0 ||
+              accountDetails.usernames.some((username) => !username.trim())
+            ) {
+              return "Enter at least one username";
+            }
+
+            if (!accountDetails.password) {
+              return "Enter the shared password";
+            }
+
+            if (
+              accountDetails.usernames.some((username) =>
+                /^.\S+@\S+$/.test(username),
+              )
+            ) {
+              return "Invalid Username. Do not use your e-mail.";
+            }
+
+            return null;
+          },
         },
-      },
-      {
-        type: "password",
-        key: "password",
       },
       {
         type: "switch",
