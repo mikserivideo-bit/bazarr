@@ -34,6 +34,18 @@ def test_shared_password_is_applied_to_each_username():
     ]
 
 
+def test_python_literal_account_settings_from_legacy_backups_are_supported():
+    provider = OpenSubtitlesComProvider(
+        accounts="{'usernames': ['first-user', 'second-user'], 'password': 'shared-password'}",
+        api_key='key',
+    )
+
+    assert provider.accounts == [
+        {'username': 'first-user', 'password': 'shared-password'},
+        {'username': 'second-user', 'password': 'shared-password'},
+    ]
+
+
 @pytest.fixture
 def provider(monkeypatch):
     instance = OpenSubtitlesComProvider(

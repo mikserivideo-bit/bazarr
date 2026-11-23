@@ -647,10 +647,17 @@ if hasattr(settings.translator, 'gemini_key'):
     del settings.translator.gemini_key
 
 # backward compatibility: migrate OpenSubtitles.com credentials to accounts
-try:
-    opensubtitles_accounts = json.loads(settings.opensubtitlescom.accounts)
-except (TypeError, ValueError):
-    opensubtitles_accounts = []
+opensubtitles_accounts_setting = settings.opensubtitlescom.accounts
+if isinstance(opensubtitles_accounts_setting, str):
+    try:
+        opensubtitles_accounts = json.loads(opensubtitles_accounts_setting)
+    except json.JSONDecodeError:
+        try:
+            opensubtitles_accounts = ast.literal_eval(opensubtitles_accounts_setting)
+        except (ValueError, SyntaxError):
+            opensubtitles_accounts = []
+else:
+    opensubtitles_accounts = opensubtitles_accounts_setting
 
 if isinstance(opensubtitles_accounts, list) and opensubtitles_accounts:
     legacy_passwords = {account['password'] for account in opensubtitles_accounts
@@ -664,6 +671,16 @@ if isinstance(opensubtitles_accounts, list) and opensubtitles_accounts:
             'password': legacy_passwords.pop(),
         })
         opensubtitles_accounts = json.loads(settings.opensubtitlescom.accounts)
+    elif all(
+            isinstance(account, dict) and isinstance(account.get('username'), str) and account.get('username') and
+            isinstance(account.get('password'), str) and account.get('password')
+            for account in opensubtitles_accounts):
+        settings.opensubtitlescom.accounts = json.dumps(opensubtitles_accounts)
+
+if isinstance(opensubtitles_accounts, dict) and \
+        isinstance(opensubtitles_accounts.get('usernames'), list) and \
+        isinstance(opensubtitles_accounts.get('password'), str):
+    settings.opensubtitlescom.accounts = json.dumps(opensubtitles_accounts)
 
 if not opensubtitles_accounts and settings.opensubtitlescom.username and settings.opensubtitlescom.password:
     settings.opensubtitlescom.accounts = json.dumps({

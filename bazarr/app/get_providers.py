@@ -4,6 +4,7 @@ import os
 import datetime
 import logging
 import json
+import ast
 import subliminal_patch
 import pretty
 import time
@@ -562,7 +563,10 @@ def get_opensubtitlescom_account_status():
         try:
             parsed_accounts = json.loads(accounts)
         except json.JSONDecodeError:
-            parsed_accounts = []
+            try:
+                parsed_accounts = ast.literal_eval(accounts)
+            except (ValueError, SyntaxError):
+                parsed_accounts = []
     else:
         parsed_accounts = accounts
 

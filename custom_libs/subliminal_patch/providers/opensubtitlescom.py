@@ -4,6 +4,7 @@ import os
 import time
 import datetime
 import json
+import ast
 import hashlib
 
 from requests import Session, ConnectionError, Timeout, ReadTimeout
@@ -169,8 +170,11 @@ class OpenSubtitlesComProvider(ProviderRetryMixin, Provider):
         if isinstance(accounts, str):
             try:
                 accounts = json.loads(accounts)
-            except json.JSONDecodeError as error:
-                raise ConfigurationError('OpenSubtitles accounts must be valid JSON') from error
+            except json.JSONDecodeError:
+                try:
+                    accounts = ast.literal_eval(accounts)
+                except (ValueError, SyntaxError) as error:
+                    raise ConfigurationError('OpenSubtitles accounts must be valid JSON') from error
 
         if isinstance(accounts, dict):
             usernames = accounts.get('usernames')
