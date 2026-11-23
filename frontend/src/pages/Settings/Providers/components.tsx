@@ -9,8 +9,10 @@ import {
   useState,
 } from "react";
 import {
+  ActionIcon,
   Alert,
   AutocompleteProps,
+  Badge,
   Button,
   Divider,
   Group,
@@ -19,12 +21,14 @@ import {
   Stack,
   Text as MantineText,
   Textarea,
+  TextInput,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import {
   faCircleCheck,
   faRightLeft,
   faTriangleExclamation,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { capitalize } from "lodash";
@@ -107,6 +111,8 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
   const activeUsername = accountStatus.data?.active_username;
   const accountCount = accountStatus.data?.account_count ?? 0;
   const accountIndex = accountStatus.data?.account_index;
+  const [usernameInput, setUsernameInput] = useState("");
+  const [bulkUsernameInput, setBulkUsernameInput] = useState("");
   const parsedSettings = (() => {
     try {
       const parsed: unknown =
@@ -174,6 +180,33 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
 
   const save = (next: OpenSubtitlesAccountSettings) =>
     update(JSON.stringify(next));
+  const addUsername = () => {
+    const username = usernameInput.trim();
+    if (!username || accountSettings.usernames.includes(username)) {
+      return;
+    }
+
+    save({
+      ...accountSettings,
+      usernames: [...accountSettings.usernames, username],
+    });
+    setUsernameInput("");
+  };
+  const addUsernames = () => {
+    const usernames = bulkUsernameInput
+      .split(/[\r\n,]+/)
+      .map((username) => username.trim())
+      .filter(Boolean);
+    if (usernames.length === 0) {
+      return;
+    }
+
+    save({
+      ...accountSettings,
+      usernames: [...new Set([...accountSettings.usernames, ...usernames])],
+    });
+    setBulkUsernameInput("");
+  };
 
   return (
     <Stack gap="xs">
@@ -194,21 +227,58 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
           Switch OpenSubtitles username
         </Button>
       ) : null}
+      <Group align="end" wrap="nowrap">
+        <TextInput
+          label="OpenSubtitles username"
+          value={usernameInput}
+          onChange={(event) => setUsernameInput(event.currentTarget.value)}
+        />
+        <Button
+          disabled={!usernameInput.trim()}
+          onClick={addUsername}
+          type="button"
+        >
+          Add
+        </Button>
+      </Group>
       <Textarea
-        label="Usernames"
-        description="Enter one username per line. All accounts use the password below."
-        minRows={3}
-        value={accountSettings.usernames.join("\n")}
-        onChange={(event) =>
-          save({
-            ...accountSettings,
-            usernames: event.currentTarget.value
-              .split(/\r?\n/)
-              .map((username) => username.trim())
-              .filter(Boolean),
-          })
-        }
+        label="Add multiple usernames"
+        description="Paste one username per line, or separate usernames with commas."
+        minRows={4}
+        onChange={(event) => setBulkUsernameInput(event.currentTarget.value)}
+        value={bulkUsernameInput}
       />
+      <Button
+        disabled={!bulkUsernameInput.trim()}
+        onClick={addUsernames}
+        type="button"
+        variant="light"
+      >
+        Add usernames
+      </Button>
+      <Group gap="xs">
+        {accountSettings.usernames.map((username) => (
+          <Group gap={4} key={username} wrap="nowrap">
+            <Badge variant="light">{username}</Badge>
+            <ActionIcon
+              aria-label={`Remove ${username}`}
+              onClick={() =>
+                save({
+                  ...accountSettings,
+                  usernames: accountSettings.usernames.filter(
+                    (item) => item !== username,
+                  ),
+                })
+              }
+              size="sm"
+              type="button"
+              variant="subtle"
+            >
+              <FontAwesomeIcon icon={faXmark} />
+            </ActionIcon>
+          </Group>
+        ))}
+      </Group>
       <PasswordInput
         label="Shared password"
         value={accountSettings.password}
