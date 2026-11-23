@@ -13,3 +13,12 @@ COPY --from=frontend-builder /src/build/ /app/bazarr/bin/frontend/build/
 COPY bazarr/app/config.py /app/bazarr/bin/bazarr/app/config.py
 COPY bazarr/app/get_providers.py /app/bazarr/bin/bazarr/app/get_providers.py
 COPY custom_libs/subliminal_patch/providers/opensubtitlescom.py /app/bazarr/bin/custom_libs/subliminal_patch/providers/opensubtitlescom.py
+RUN chmod 755 \
+      /app/bazarr/bin/bazarr \
+      /app/bazarr/bin/bazarr/app \
+      /app/bazarr/bin/custom_libs/subliminal_patch \
+      /app/bazarr/bin/custom_libs/subliminal_patch/providers \
+    && chmod 644 \
+      /app/bazarr/bin/bazarr/app/config.py \
+      /app/bazarr/bin/bazarr/app/get_providers.py \
+      /app/bazarr/bin/custom_libs/subliminal_patch/providers/opensubtitlescom.py
