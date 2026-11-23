@@ -1,0 +1,17 @@
+services:
+  bazarr-luka:
+    image: bazarr-luka:latest
+    build:
+      context: .
+      dockerfile: Dockerfile.portainer
+    container_name: bazarr-luka
+    environment:
+      PUID: 1000
+      PGID: 10
+      TZ: Europe/Zagreb
+    volumes:
+      - /volume1/docker/bazarr-luka:/config
+      - /volume1/shared:/data
+    ports:
+      - "6768:6767"
+    restart: unless-stopped
