@@ -558,18 +558,28 @@ def get_opensubtitlescom_account_status():
         logging.exception("Could not get OpenSubtitles.com account status")
 
     accounts = settings.opensubtitlescom.accounts
-    try:
-        parsed_accounts = json.loads(accounts)
-    except (TypeError, json.JSONDecodeError):
-        parsed_accounts = []
+    if isinstance(accounts, str):
+        try:
+            parsed_accounts = json.loads(accounts)
+        except json.JSONDecodeError:
+            parsed_accounts = []
+    else:
+        parsed_accounts = accounts
 
     if isinstance(parsed_accounts, dict):
         usernames = parsed_accounts.get('usernames', [])
     elif isinstance(parsed_accounts, list):
-        usernames = [account.get('username') for account in parsed_accounts
-                     if isinstance(account, dict) and account.get('username')]
+        usernames = [
+            account if isinstance(account, str) else account.get('username')
+            for account in parsed_accounts
+            if isinstance(account, str) or isinstance(account, dict)
+        ]
     else:
         usernames = []
+    usernames = [username for username in usernames if isinstance(username, str) and username.strip()]
+
+    if not usernames and settings.opensubtitlescom.username:
+        usernames = [settings.opensubtitlescom.username]
 
     active_index = 0
     cached_index = subliminal_cache_region.get(

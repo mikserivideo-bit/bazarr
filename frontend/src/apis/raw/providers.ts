@@ -13,6 +13,12 @@ class ProviderApi extends BaseApi {
     return response.data;
   }
 
+  async openSubtitlesAccountStatus() {
+    return this.get<System.OpenSubtitlesAccountStatus>("", {
+      account_status: "opensubtitlescom",
+    });
+  }
+
   async reset() {
     await this.post("", { action: "reset" });
   }

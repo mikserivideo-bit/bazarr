@@ -58,7 +58,7 @@ import { ASSERT } from "@/utilities/console";
 import { IntegrationList, ProviderInfo, ProviderList } from "./list";
 import {
   useSwitchOpenSubtitlesAccount,
-  useSystemProviders,
+  useOpenSubtitlesAccountStatus,
 } from "@/apis/hooks";
 
 type SettingsKey =
@@ -101,15 +101,12 @@ const OpenSubtitlesAccounts: FunctionComponent<{ settingKey: string }> = ({
   const { value, update } = useBaseInput<{ settingKey: string }, string>({
     settingKey,
   });
-  const providers = useSystemProviders();
+  const accountStatus = useOpenSubtitlesAccountStatus();
   const { mutate: switchAccount, isPending: isSwitchingAccount } =
     useSwitchOpenSubtitlesAccount();
-  const openSubtitlesProvider = providers.data?.find(
-    (provider) => provider.name === "opensubtitlescom",
-  );
-  const activeUsername = openSubtitlesProvider?.active_username;
-  const accountCount = openSubtitlesProvider?.account_count ?? 0;
-  const accountIndex = openSubtitlesProvider?.account_index;
+  const activeUsername = accountStatus.data?.active_username;
+  const accountCount = accountStatus.data?.account_count ?? 0;
+  const accountIndex = accountStatus.data?.account_index;
   const parsedSettings = (() => {
     try {
       const parsed: unknown =

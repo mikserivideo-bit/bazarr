@@ -16,6 +16,9 @@ api_ns_providers = Namespace('Providers', description='Get and reset providers s
 class Providers(Resource):
     get_request_parser = reqparse.RequestParser()
     get_request_parser.add_argument('history', type=str, required=False, help='Provider name for history stats')
+    get_request_parser.add_argument(
+        'account_status', type=str, required=False, location='args',
+        help='Return account status for a provider')
 
     get_response_model = api_ns_providers.model('MovieBlacklistGetResponse', {
         'name': fields.String(),
@@ -33,6 +36,9 @@ class Providers(Resource):
     def get(self):
         """Get providers status"""
         args = self.get_request_parser.parse_args()
+        if args.get('account_status') == 'opensubtitlescom':
+            return get_opensubtitlescom_account_status(), 200
+
         history = args.get('history')
         if history and history not in False_Keys:
             providers = database.execute(

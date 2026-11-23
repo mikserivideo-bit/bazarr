@@ -8,6 +8,12 @@ export const useSystemProviders = (history?: boolean) =>
     queryFn: () => api.providers.providers(history),
   });
 
+export const useOpenSubtitlesAccountStatus = () =>
+  useQuery({
+    queryKey: [QueryKeys.System, QueryKeys.Providers, "opensubtitles-account"],
+    queryFn: () => api.providers.openSubtitlesAccountStatus(),
+  });
+
 export const useMoviesProvider = (radarrId?: number) =>
   useQuery({
     queryKey: [
@@ -72,6 +78,10 @@ export const useSwitchOpenSubtitlesAccount = () => {
     ],
     mutationFn: () => api.providers.switchOpenSubtitlesAccount(),
     onSuccess: (accountStatus) => {
+      client.setQueryData<System.OpenSubtitlesAccountStatus>(
+        [QueryKeys.System, QueryKeys.Providers, "opensubtitles-account"],
+        accountStatus,
+      );
       client.setQueryData<System.Provider[]>(
         [QueryKeys.System, QueryKeys.Providers, false],
         (providers) =>
