@@ -11,7 +11,7 @@ services:
       TZ: Europe/Zagreb
     volumes:
       - /volume1/docker/bazarr-luka:/config
-      - /volume1/shared:/data
+      - /volume2:/data
     ports:
       - "6768:6767"
     restart: unless-stopped
